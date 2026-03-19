@@ -1,0 +1,51 @@
+# Entorno Virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Configuración con credenciales
+config/config_cdc.json
+.env
+.env.local
+
+# Certificados y claves privadas
+certs/
+*.pem
+*.key
+*.crt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Datos sensibles
+data/*.csv
+data/resultados/
+*.log
+
+# Postman (sin versionear colecciones con credenciales)
+Security_Test.postman_environment.json
+
+# pytest
+.pytest_cache/
+htmlcov/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json

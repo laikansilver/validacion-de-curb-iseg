@@ -12,15 +12,25 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import sys
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
+
+try:
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    HAS_CRYPTOGRAPHY = True
+except ImportError:
+    HAS_CRYPTOGRAPHY = False
 
 
 CURP_PATTERN = re.compile(
@@ -97,6 +107,130 @@ class HttpExistenceProvider(ExistenceProvider):
             return exists, str(message)
 
         return None, "La API no devolvio un campo booleano 'exists'."
+
+
+class CirculoCreditoExistenceProvider(ExistenceProvider):
+    """Consulta existencia de CURP via Identity Data API de Circulo de Credito.
+
+    Endpoint esperado:
+      POST {base_url}/identity-data/validations
+
+    Headers esperados por el proveedor:
+      - x-api-key
+      - x-signature (si auto_sign=True, se genera automaticamente)
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        signature: Optional[str] = None,
+        auto_sign: bool = False,
+        private_key_hex: Optional[str] = None,
+        timeout: int = 15,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.username = username
+        self.password = password
+        self.signature = signature
+        self.auto_sign = auto_sign
+        self.private_key_hex = private_key_hex
+        self.timeout = timeout
+
+        if auto_sign and not private_key_hex:
+            raise ValueError("auto_sign requiere private_key_hex")
+
+    def _sign_payload(self, payload: bytes) -> str:
+        """Genera firma ECDSA SHA256 del payload (x-signature)."""
+        if not HAS_CRYPTOGRAPHY:
+            raise RuntimeError("Se requiere 'cryptography' para auto_sign. Instala: pip install cryptography")
+
+        private_value = int(self.private_key_hex, 16)
+        private_key = ec.derive_private_key(private_value, ec.SECP384R1(), default_backend())
+
+        signature_bytes = private_key.sign(payload, ec.ECDSA(hashes.SHA256()))
+
+        signature_hex = signature_bytes.hex()
+        return signature_hex
+
+    def check(self, curp: str) -> tuple[Optional[bool], str]:
+        url = f"{self.base_url}/identity-data/validations"
+        body = {
+            "infoProvider": "RENAPO",
+            "curp": curp,
+            "requestId": str(uuid.uuid4()),
+        }
+        payload = json.dumps(body, ensure_ascii=True).encode("utf-8")
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "x-api-key": self.api_key,
+        }
+
+        if self.auto_sign:
+            try:
+                signature_hex = self._sign_payload(payload)
+                headers["x-signature"] = signature_hex
+            except Exception as e:
+                return None, f"Error al firmar payload: {str(e)}"
+        elif self.signature:
+            headers["x-signature"] = self.signature
+
+        if self.username:
+            headers["username"] = self.username
+        if self.password:
+            headers["password"] = self.password
+
+        req = urllib.request.Request(url=url, data=payload, headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            try:
+                error_payload = json.loads(exc.read().decode("utf-8"))
+                if isinstance(error_payload, dict):
+                    estatus = error_payload.get("estatus")
+                    mensaje = error_payload.get("mensaje", "Error desconocido")
+
+                    if estatus in {"404", "404.1"}:
+                        return False, f"RENAPO indica no encontrada: {mensaje}"
+
+                    details = json.dumps(error_payload)
+                    return None, f"Error API (estatus {estatus}): {mensaje} | {details}"
+
+                if isinstance(error_payload, str):
+                    return None, f"Error API ({exc.code}): {error_payload}"
+            except Exception:
+                pass
+
+            return None, f"Error HTTP en consulta oficial: {exc.code}"
+        except urllib.error.URLError as exc:
+            return None, f"Error de red en consulta oficial: {exc.reason}"
+        except json.JSONDecodeError:
+            return None, "Respuesta no valida (no es JSON)."
+
+        code = response_payload.get("code")
+        message = response_payload.get("message")
+        data = response_payload.get("data", {})
+
+        if code == 200 and message == "Success":
+            if isinstance(data, dict):
+                curp_result = data.get("resultCURPS", {})
+                if isinstance(curp_result, dict):
+                    status = curp_result.get("statusCurp")
+                    if status:
+                        return True, f"RENAPO exitoso (status: {status})."
+            return True, "RENAPO exitoso."
+
+        if code in {404, "404", "404.1"}:
+            return False, "RENAPO reporta CURP no encontrada."
+
+        return None, f"RENAPO devolvio codigo {code}: {message}"
 
 
 def normalize_curp(curp: str) -> str:
@@ -218,9 +352,38 @@ def process_csv(input_csv: str, output_csv: str, provider: ExistenceProvider) ->
         writer.writerows(rows_out)
 
 
-def build_provider(api_url: Optional[str], api_token: Optional[str]) -> ExistenceProvider:
+def build_provider(
+    api_url: Optional[str],
+    api_token: Optional[str],
+    cdc_enabled: bool,
+    cdc_base_url: Optional[str],
+    cdc_api_key: Optional[str],
+    cdc_username: Optional[str],
+    cdc_password: Optional[str],
+    cdc_signature: Optional[str],
+    cdc_auto_sign: bool = False,
+    cdc_private_key: Optional[str] = None,
+) -> ExistenceProvider:
+    if cdc_enabled:
+        if not cdc_api_key:
+            raise ValueError("Falta --cdc-api-key para Círculo de Crédito")
+
+        if cdc_auto_sign and not cdc_private_key:
+            raise ValueError("--cdc-auto-sign requiere --cdc-private-key")
+
+        return CirculoCreditoExistenceProvider(
+            base_url=cdc_base_url or "https://services.circulodecredito.com.mx/sandbox/v1/identityData",
+            api_key=cdc_api_key,
+            username=cdc_username,
+            password=cdc_password,
+            signature=cdc_signature,
+            auto_sign=cdc_auto_sign,
+            private_key_hex=cdc_private_key,
+        )
+
     if api_url:
         return HttpExistenceProvider(base_url=api_url, token=api_token)
+
     return NoExistenceProvider()
 
 
@@ -235,6 +398,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-url", help="URL del endpoint oficial/proxy para validar existencia. Ej: https://mi-api/curp/exists")
     parser.add_argument("--api-token", help="Token Bearer para autenticar contra la API.")
 
+    parser.add_argument("--cdc", action="store_true", help="Usa Identity Data API de Círculo de Crédito para validar existencia por RENAPO.")
+    parser.add_argument("--cdc-base-url", help="Base URL del API de Círculo de Crédito (default: sandbox).")
+    parser.add_argument("--cdc-api-key", help="Valor del header x-api-key (Consumer Key).")
+    parser.add_argument("--cdc-username", help="Valor del header username (opcional).")
+    parser.add_argument("--cdc-password", help="Valor del header password (opcional).")
+    parser.add_argument("--cdc-signature", help="Valor del header x-signature (si prefieres no auto-firmar).")
+    parser.add_argument("--cdc-auto-sign", action="store_true", help="Genera x-signature automaticamente (requiere --cdc-private-key).")
+    parser.add_argument("--cdc-private-key", help="Llave privada en formato hex (sin dos puntos, generada con generar_llaves.py).")
+
     return parser.parse_args()
 
 
@@ -245,7 +417,18 @@ def main() -> int:
         print("Error: si usas --input-csv debes indicar --output-csv.", file=sys.stderr)
         return 2
 
-    provider = build_provider(args.api_url, args.api_token)
+    provider = build_provider(
+        api_url=args.api_url,
+        api_token=args.api_token,
+        cdc_enabled=args.cdc,
+        cdc_base_url=args.cdc_base_url,
+        cdc_api_key=args.cdc_api_key,
+        cdc_username=args.cdc_username,
+        cdc_password=args.cdc_password,
+        cdc_signature=args.cdc_signature,
+        cdc_auto_sign=args.cdc_auto_sign,
+        cdc_private_key=args.cdc_private_key,
+    )
 
     try:
         if args.curp:

@@ -1,0 +1,1188 @@
+openapi: 3.0.1
+info:
+  title: Identity Data
+  description: <p>El API de Identity data permite consultar y validar información de CURP, INE y Cédula Profesional a través de distintas fuentes oficiales y confiables.
+    Este servicio integra de manera segura múltiples fuentes de información, incluyendo:</p>
+    <ul><li>RENAPO (Registro Nacional de Población) para validación de CURP.</li><li>INE (Instituto Nacional Electoral) para validación de los principales datos de la credencial para votar.</li><li>Diversas fuentes de datos oficiales y confiables  para validación de cédulas profesionales.</li><li>Plataformas de datos abiertos del Gobierno de México y otras bases de datos complementarias.</li></ul><p>El API está diseñado para facilitar la validación de identidad digital, prevención de fraudes y cumplimiento normativo (KYC).</p><br/>
+  termsOfService: https://developer.circulodecredito.com.mx/legal-mx
+  contact:
+    email: api@circulodecredito.com.mx
+  license:
+    name: Derechos reservados Circulo de Crédito 2025
+    url: http://www.circulodecredito.com.mx
+  version: "1.0"
+
+servers:
+  - url: https://services.circulodecredito.com.mx/identity-data/v1
+
+tags:
+  - name: IdentityData
+    description: Direct identity queries (RENAPO / INE / SEP / and more) via request payload.
+  
+
+paths:
+  /queries:
+    post:
+      tags: [IdentityData]
+      operationId: create_validation
+      summary: Query identity data from multiple providers in a single request
+      description: >
+        Executes identity validations against one or more providers (RENAPO, INE, SEP, and more)
+        using a single request. If the payload includes fields for multiple providers,
+        the API returns **partial results** per provider.
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+        - $ref: '#/components/parameters/apiKeyHeader'
+        - $ref: '#/components/parameters/usernameHeader'
+        - $ref: '#/components/parameters/passwordHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/identityValidationRequest'
+            examples:
+              renapo_by_curp_only:
+                summary: RENAPO query by CURP only
+                value:
+                  externalId: "002af621-997a-4b1c-8557-c4ae0ccb3041"
+                  renapoQuery:
+                    curp: "SSSS010101SSSSXXXX"
+              renapo_by_personal_data_only:
+                summary: RENAPO query by personal data only
+                value:
+                  externalId: "b1d6a9d0-4d1e-4ef8-9a5f-1c5d34f0d7a9"
+                  renapoQuery:
+                    personalData:
+                      paternalSurname: "[PATERNAL_SURNAME]"
+                      maternalSurname: "[MATERNAL_SURNAME]"
+                      firstName: "[FIRST_NAME]"
+                      sex: "[H/M]"
+                      dateOfBirth: "[DD/MM/YYYY]"
+                      subdivision: "MN"
+              ine_only:
+                summary: INE query only
+                value:
+                  externalId: "b1d6a9d0-4d1e-4ef8-9a5f-1c5d34f0d7a9"
+                  ineQuery:
+                    cic: "[CIC]"
+                    ocr: "[OCR]"
+                    electorKey: "[ELECTOR_KEY]"
+                    issuingNumber: "03"
+                    registrationYear: 2010
+              renapo_and_ine:
+                summary: RENAPO (CURP) + INE in the same request
+                value:
+                  externalId: "b1d6a9d0-4d1e-4ef8-9a5f-1c5d34f0d7a9"
+                  renapoQuery:
+                    curp: "SSSS010101SSSSXXXX"
+                  ineQuery:
+                    cic: "[CIC]"
+                    ocr: "[OCR]"
+                    electorKey: "[ELECTOR_KEY]"
+                    issuingNumber: "03"
+                    registrationYear: 2010
+              sep_only:
+                summary: SEP query by degree number
+                value:
+                  externalId: "b1d6a9d0-4d1e-4ef8-9a5f-1c5d34f0d7a9"
+                  sepQuery:
+                    degreeNumber: "[DEGREE_NUMBER]"
+      responses:
+        '200':
+          description: Consolidated validation results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/standardEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/consolidatedResultsData'
+              examples:
+                renapo_success:
+                  summary: RENAPO success
+                  value:
+                    code: "200"
+                    message: Success
+                    dateTime: "2025-10-09T16:30:15Z"
+                    externalId: "f0f0f0f0-1111-2222-3333-444444444444"
+                    data:
+                      results:
+                        - source: RENAPO
+                          status: SUCCESS
+                          data:
+                            codigoRespuesta: "00"
+                            descripcionRespuesta: "TRANSACCION EXITOSA"
+                            referencia: "123456574"
+                            respuestaRENAPO:
+                              CURPStatus:
+                                statusOper: "EXITOSO"
+                                message: "LA OPERACION SE EJECUTO."
+                                sessionID: "gcM-3ASUtoe0p0xxdRZuGFtaHZp1qfevfAyu89wrY..."
+                                resultCURPS:
+                                  CURP: "SSSS010101SSSSXXXX"
+                                  apellidoPaterno: "[APELLIDO_PATERNO]"
+                                  apellidoMaterno: "[APELLIDO_MATERNO]"
+                                  nombres: "[NOMBRES]"
+                                  sexo: "[H/M]"
+                                  fechNac: "[DD/MM/YYYY]"
+                                  nacionalidad: "MEX"
+                                  docProbatorio: "1"
+                                  anioReg: "1991"
+                                  numActa: "01693"
+                                  numEntidadReg: "16"
+                                  cveMunicipioReg: "052"
+                                  cveEntidadNac: "MN"
+                                  statusCurp: "RCN"
+                          additionalInfo:
+                            referenceId: "ABC-12345"
+                ine_success:
+                  summary: INE success
+                  value:
+                    code: "200"
+                    message: Success
+                    dateTime: "2025-10-09T16:30:15Z"
+                    externalId: "f0f0f0f0-1111-2222-3333-444444444444"
+                    data:
+                      results:
+                        - source: INE
+                          status: SUCCESS
+                          data:
+                            estatus: "OK"
+                            mensaje: "Esta vigente como medio de identificacion y puede votar"
+                            codigoValidacion: "vi1648070031.2717297"
+                            claveMensaje: "3"
+                            claveElector: "QWERTY12345678M001"
+                            numeroEmision: "4"
+                            anioRegistro: "2010"
+                            anioEmision: "2017"
+                            vigencia: "31 de diciembre de 2027"
+                            ocr: "1234567890020"
+                            cic: "123456789"
+                            distritoFederal: "11"
+                          additionalInfo:
+                            referenceId: "ABC-67890"
+                sep_success:
+                  summary: SEP success
+                  value:
+                    code: "200"
+                    message: Success
+                    dateTime: "2025-10-09T16:40:00Z"
+                    externalId: "b1d6a9d0-4b1e-4ef8-9a5f-1c5d34f0d7a9"
+                    data:
+                      results:
+                        - source: SEP
+                          status: SUCCESS
+                          data:
+                            cedulas:
+                              - institucion: "[INSTITUCION]"
+                                nombres: "[NOMBRES]"
+                                apellidoPaterno: "[APELLIDO_PATERNO]"
+                                apellidoMaterno: "[APELLIDO_MATERNO]"
+                                cedula: "[CEDULA]"
+                                sexo: "[H/M]"
+                                tipo: "C1"
+                                titulo: "[TITULO]"
+                            "códigoValidacion": "cp1619567036.099915"
+                            estatus: "OK"
+                            "códigoMensaje": "0"
+                          additionalInfo:
+                            referenceId: "ACB-SEP-123456"
+                renapo_and_ine_success:
+                  summary: RENAPO + INE success (partial results array)
+                  value:
+                    code: "200"
+                    message: Success
+                    dateTime: "2025-10-09T16:30:15Z"
+                    externalId: "f0f0f0f0-1111-2222-3333-444444444444"
+                    data:
+                      results:
+                        - source: RENAPO
+                          status: SUCCESS
+                          data:
+                            codigoRespuesta: "00"
+                            descripcionRespuesta: "TRANSACCION EXITOSA"
+                            referencia: "123456574"
+                            respuestaRENAPO:
+                              CURPStatus:
+                                statusOper: "EXITOSO"
+                                message: "LA OPERACION SE EJECUTO."
+                                sessionID: "gcM-3ASUtoe0p0xxdRZuGFtaHZp1qfevfAyu89wrY..."
+                                resultCURPS:
+                                  CURP: "SSSS010101SSSSXXXX"
+                                  apellidoPaterno: "[APELLIDO_PATERNO]"
+                                  apellidoMaterno: "[APELLIDO_MATERNO]"
+                                  nombres: "[NOMBRES]"
+                                  sexo: "[H/M]"
+                                  fechNac: "[DD/MM/YYYY]"
+                                  nacionalidad: "MEX"
+                                  docProbatorio: "1"
+                                  anioReg: "1991"
+                                  numActa: "01693"
+                                  numEntidadReg: "16"
+                                  cveMunicipioReg: "052"
+                                  cveEntidadNac: "MN"
+                                  statusCurp: "RCN"
+                          additionalInfo:
+                            referenceId: "ABC-12345"
+                        - source: INE
+                          status: SUCCESS
+                          data:
+                            estatus: "OK"
+                            mensaje: "Esta vigente como medio de identificacion y puede votar"
+                            codigoValidacion: "vi1648070031.2717297"
+                            claveMensaje: "3"
+                            claveElector: "QWERTY12345678M001"
+                            numeroEmision: "4"
+                            anioRegistro: "2010"
+                            anioEmision: "2017"
+                            vigencia: "31 de diciembre de 2027"
+                            ocr: "1234567890020"
+                            cic: "123456789"
+                            distritoFederal: "11"
+                          additionalInfo:
+                            referenceId: "ABC-67890"
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalid_curp_format:
+                  summary: RENAPO — invalid CURP format
+                  value:
+                    errors:
+                      - code: "400.2"
+                        message: "RENAPO: Invalid CURP format."
+                invalid_ine_fields:
+                  summary: INE — invalid OCR / electorKey
+                  value:
+                    errors:
+                      - code: "400.4"
+                        message: "INE: Invalid OCR."
+                      - code: "400.5"
+                        message: "INE: Invalid electorKey length."
+                duplicate_request_id:
+                  summary: Idempotency — externalId already exists
+                  value:
+                    errors:
+                      - code: "400.1"
+                        message: "externalId already exists."
+        '401':
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalid_api_key:
+                  value:
+                    errors:
+                      - code: "401.1"
+                        message: "Invalid x-api-key."
+                invalid_credentials:
+                  value:
+                    errors:
+                      - code: "401.2"
+                        message: "Invalid credentials (username/password)."
+                product_not_assigned:
+                  value:
+                    errors:
+                      - code: "401.3"
+                        message: "Product not assigned to the application."
+                resource_not_allowed:
+                  value:
+                    errors:
+                      - code: "401.4"
+                        message: "Access to the resource is not allowed."
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalid_signature_post:
+                  summary: X-Signature invalid for POST (body signing)
+                  value:
+                    errors:
+                      - code: "403.1"
+                        message: "We could not verify the signature, x-signature is invalid"
+        '404':
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                renapo_curp_not_found:
+                  summary: RENAPO — CURP not found
+                  value:
+                    errors:
+                      - code: "404.1"
+                        message: "RENAPO: CURP not found."
+                ine_record_not_found:
+                  summary: INE — record not found
+                  value:
+                    errors:
+                      - code: "404.2"
+                        message: "INE: record not found."
+                sep_degree_not_found:
+                  summary: SEP — degree not found
+                  value:
+                    errors:
+                      - code: "404.3"
+                        message: "SEP: degree not found."
+        '429':
+          description: Too many requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                throttled:
+                  value:
+                    errors:
+                      - code: "429"
+                        message: "Too many requests."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                generic_error:
+                  value:
+                    errors:
+                      - code: "500"
+                        message: "Unexpected error, try again later."
+                upstream_timeout:
+                  summary: Upstream timeout (RENAPO/INE/SEP)
+                  value:
+                    errors:
+                      - code: "500.2"
+                        message: "Upstream provider timeout."
+        '503':
+          description: Service unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                service_unavailable:
+                  value:
+                    errors:
+                      - code: "503"
+                        message: "Service unavailable."
+                        
+  /cedula:
+    post:
+      tags: 
+        - Verify cedula
+      summary: Verify cedula
+      description: >
+        Verify cedula, you need to create a subscription with the event "mx.com.circulodecredito.idendata" documentation <a> https://developer.circulodecredito.com.mx/producto/suscripciones </a>
+      parameters:
+        - $ref: '#/components/parameters/signatureHeader'
+        - $ref: '#/components/parameters/apiKeyHeader'
+        - $ref: '#/components/parameters/usernameHeader'
+        - $ref: '#/components/parameters/passwordHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityCedulaValidationRequest'
+            examples:
+              cedula_validator_by_curp:
+                summary: Cedula Validator by CURP only
+                value:
+                  cedulaValidator:
+                    externalId: "002af621-997a-4b1c-8557-c4ae0ccb3041"
+                    suscriptionId: "102af621-000a-4b1c-8557-c4ae0ccb2233"
+                    name: "[NAME]"
+                    lastName: "[LAST_NAME]"
+                    secondLastName: "[SECOND_LAST_NAME]"
+                    curp: "SSSS010101SSSSXXXX"
+                    
+              
+      responses:
+        '200':
+          description: Consolidated validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityCedulaValidationResponse'
+        
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                properties_not_allowed:
+                  summary: properties not allowed
+                  value:
+                    errors:
+                      - code: "400.0"
+                        message: "Object instance has properties which are not allowed by the schema: {message}"
+                duplicate_request_id:
+                  summary: externalId already exists
+                  value:
+                    errors:
+                      - code: "400.1"
+                        message: "externalId already exists."
+                invalid_format_regex:
+                  summary: invalid format regex
+                  value:
+                    errors:
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/curp'] String 'SSSS010101SSSSXXXX?' is too long (length: 19, maximum allowed: 18)."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/curp'] ECMA 262 regex '^[A-Za-z0-9]{18,18}$' does not match input string 'SSSS010101SSSSXXXX?'."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/externalId'] String '391d151f-1cac-44e7-a05b-79a1199621d6a' is too long (length: 37, maximum allowed: 36)."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/externalId'] ECMA 262 regex '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' does not match input string '391d151f-1cac-44e7-a05b-79a1199621d6a'."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/lastName'] ECMA 262 regex '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$' does not match input string 'Ocho?'."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/name'] ECMA 262 regex '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$' does not match input string 'Juan Pruebas?'."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/secondLastName'] ECMA 262 regex '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$' does not match input string 'Nueve?'."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/subscriptionId'] String '7c8a0230-36e0-43f4-9b7a-581dc55ea9c3a' is too long (length: 37, maximum allowed: 36)."
+                      - code: "400.2"
+                        message: "[Path '/cedulaValidator/subscriptionId'] ECMA 262 regex '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' does not match input string '7c8a0230-36e0-43f4-9b7a-581dc55ea9c3a'."
+                invalid_ine_fields:
+                  summary: subscriptionId not exist
+                  value:
+                    errors:
+                      - code: "400.2"
+                        message: "Not found subscriptionId {subscriptionId}"
+                invalid_request:
+                  summary: invalid format request
+                  value:
+                    errors:
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['externalId']): []"
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['subscriptionId']): []"
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['name']): []"
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['secondName']): []"
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['lastName']): []"
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['secondLastName']): []"
+                      - code: "400.3"
+                        message: "[Path '/cedulaValidator'] Object has missing required properties (['curp']): []"
+                      - code: "400.3"
+                        message: "No API path found that matches request ''.: []"
+                      
+        '401':
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalid_api_key:
+                  value:
+                    errors:
+                      - code: "401.1"
+                        message: "Invalid x-api-key."
+                invalid_credentials:
+                  value:
+                    errors:
+                      - code: "401.2"
+                        message: "Unauthorized, invalid credentials"
+                product_not_assigned:
+                  value:
+                    errors:
+                      - code: "401.3"
+                        message: "Product not assigned to the application."
+                resource_not_allowed:
+                  value:
+                    errors:
+                      - code: "401.4"
+                        message: "Access to the resource is not allowed."
+        '403':
+          description: Forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalid_signature_post:
+                  summary: X-Signature invalid for POST (body signing)
+                  value:
+                    errors:
+                      - code: "403.1"
+                        message: "We could not verify the signature, x-signature is invalid"
+        '404':
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                invalid_signature_post:
+                  summary: Subscription not found
+                  value:
+                    errors:
+                      - code: "404.1"
+                        message: "Not found subscriptionId: abe5f0ec-e227-4fd9-a67b-f89e3cbd1f21"
+        '429':
+          description: Too many requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                throttled:
+                  value:
+                    errors:
+                      - code: "429"
+                        message: "Too many requests."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                generic_error:
+                  value:
+                    errors:
+                      - code: "500.1"
+                        message: "Internal Server Error."
+        '503':
+          description: Service unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                service_unavailable:
+                  value:
+                    errors:
+                      - code: "503"
+                        message: "Service unavailable."
+  
+  /cedula/{inquiryId}:
+    get:
+      tags:
+        - Verify cedula
+      summary: Get result verify cedula
+      description: '<p>Returns the Verify cedula process payload associated with the inquiry. The inquiry is identified by the <samp>{inquiryId}</samp> path parameter.</p><table border="1" style="width:100%"><thead><tr><th>Code</th><th>Reason Process</th></tr></thead><tbody><tr><td>404.1</td><td>Not found cedula.</td></tr><tr><td>503.1</td><td>Service temporarily unavailable, please try again later.</td></tr></tbody></table>'
+      operationId: getVerifyCedula
+      parameters:
+        - name: x-api-key
+          in: header
+          description: The Consumer Key assigned to the application you have registered
+            in API Hub.
+          required: true
+          schema:
+           type: string
+        - name: username
+          in: header
+          description: Username of the inquiry user.
+          required: true
+          schema:
+           type: string
+        - name: password
+          in: header
+          description: Password of the inquiry user.
+          required: true
+          schema:
+           type: string
+        - name: x-signature
+          in: header
+          description: Signature created with your private key (SHA256withECDSA - secp384r).
+            API Hub verifies the signature matches with the URL using your public key.
+            Your public key must be uploaded in the API Hub Portal Applications section.
+          required: true
+          schema:
+           type: string
+        - name: inquiryId
+          in: path
+          description: The identifier of the inquiry.
+          required: true
+          schema:
+           type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyCedulaGetResponse'
+              examples:
+                get_cedula_validator_by_curp:
+                  summary: GET Cedula Validator
+                  value:
+                    dateTime: "2020-04-12T22:20:50.52Z"
+                    operation: "consumption"
+                    message: "The cedula verification request has been received."
+                    result:
+                      request:
+                        externalId: "391d151f-1cac-44e7-a05b-79a1199621d6"
+                        suscriptionId: "7c8a0230-36e0-43f4-9b7a-581dс55eа9сЗ"
+                        name: "[NAME]"
+                        lastName: "[LAST_NAME]"
+                        secondLastName: "[SECOND_LAST_NAME]"
+                        curp: "SSSS010101SSSSXXXX"
+                      cedulaData:
+                        curp: "SSSS010101SSSSXXXX"
+                        names: "[NAMES]"
+                        lastName: "[LAST_NAME]"
+                        secondLastName: "[SECOND_LAST_NAME"
+                        gender: "[GENDER]"
+                        birthDate: "[DD/MM/YYYY]"
+                        birthPlace: "MEXICO"
+                        cedulas: 
+                            - cedula: "12345678"
+                              institucion: "[INSTITUCION]"
+                              careersDegress: "[CARERRS_DEGRESS]"
+                            - cedula: "12345678"
+                              institucion: "[INSTITUCION]"
+                              careersDegress: "[CARERRS_DEGRESS]"
+                get_cedula_validator_by_curp_404:
+                  summary: GET Cedula Validator 404.1
+                  value:
+                    dateTime: "2020-04-12T22:20:50.52Z"
+                    operation: "consumption"
+                    message: "The cedula verification request has been received."
+                    result:
+                      reasonProcess:
+                        code: "404.1"
+                        message: "Not found cedula"
+                      request:
+                        externalId: "391d151f-1cac-44e7-a05b-79a1199621d6"
+                        suscriptionId: "7c8a0230-36e0-43f4-9b7a-581dс55eа9сЗ"
+                        name: "[NAME]"
+                        lastName: "[LAST_NAME]"
+                        secondLastName: "[SECOND_LAST_NAME]"
+                        curp: "SSSS010101SSSSXXXX"
+                get_cedula_validator_by_curp_503:
+                  summary: GET Cedula Validator 503.1
+                  value:
+                    dateTime: "2020-04-12T22:20:50.52Z"
+                    operation: "consumption"
+                    message: "The cedula verification request has been received."
+                    result:
+                      reasonProcess:
+                        code: "503.1"
+                        message: "Service temporarily unavailable, please try again later"
+                      request:
+                        externalId: "391d151f-1cac-44e7-a05b-79a1199621d6"
+                        suscriptionId: "7c8a0230-36e0-43f4-9b7a-581dс55eа9сЗ"
+                        name: "[NAME]"
+                        lastName: "[LAST_NAME]"
+                        secondLastName: "[SECOND_LAST_NAME]"
+                        curp: "SSSS010101SSSSXXXX"
+                      
+                      
+        '400':
+          description: Inquiry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                API_path_not_found:
+                  value:
+                    errors:
+                      - code: "400.3"
+                        message: "No API path found that matches request."
+        '404':
+          description: Inquiry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                service_unavailable:
+                  value:
+                    errors:
+                      - code: "404.1"
+                        message: "The inquiry does not exist {inquiryId}."
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+              examples:
+                generic_error:
+                  value:
+                    errors:
+                      - code: "500.1"
+                        message: "Internal Server Error."
+          
+components:
+  parameters:
+    signatureHeader:
+      name: x-signature
+      in: header
+      required: true
+      description: >
+        The signature (X-Signature) for POST is generated using your private key
+        (SHA256withECDSA - secp384r) by signing the exact UTF-8 JSON request body (payload).
+        The API Hub verifies the X-Signature using your public key, which must be registered
+        in the applications section of the API Hub portal.
+      schema: { type: string }
+      
+    apiKeyHeader:
+      name: x-api-key
+      in: header
+      required: true
+      description: The Consumer Key assigned to the application you have registered in API Hub.
+      schema: { type: string }
+
+    usernameHeader:
+      name: username
+      in: header
+      required: true
+      description: Username of the inquiry user.
+      schema: { type: string }
+
+    passwordHeader:
+      name: password
+      in: header
+      required: true
+      description: Password of the inquiry user.
+      schema: { type: string }
+
+  schemas:
+    
+    VerifyCedulaGetResponse:
+      type: object
+      properties:
+        dateTime:
+          type: string
+          format: date-time
+          example: 2020-04-12T22:20:50.52Z
+          description: Date and time of the acknowledge. As defined by date-time - RFC3339.
+        operation:
+          type: string
+          example: consumption
+          description: Cedula Verification operation.
+          enum: [request, consumption]
+        message: 
+          type: string
+          readOnly: true
+          example: The cedula verification request has been received.
+          description: Descriptive and human-readable message.
+        result:
+          $ref: '#/components/schemas/ResultCedula'
+    
+    ResultCedula:
+      type: object
+      properties:
+        reasonProcess:
+          $ref: '#/components/schemas/ReasonProcess'
+        request:
+          $ref: '#/components/schemas/CedulaValidatorGet'
+        cedulaData:
+          $ref: '#/components/schemas/CedulaData'
+        
+    ReasonProcess:
+      type: object
+      properties:
+        code:
+          type: string
+          example: 404.1
+        message:
+          type: string
+          example: Not found cedula.
+
+    CedulaData:
+      type: object
+      properties:
+        curp:
+          type: string
+          example: SSSS010101SSSSXXXX
+        names:
+          type: string
+          example: Juan
+        lastName:
+          type: string
+          example: Pruebas
+        secondLastName:
+          type: string
+          example: Pruebas
+        gender:
+          type: string
+          example: H
+        birthDate:
+          type: string
+          example: 03/06/1990
+        birthPlace:
+          type: string
+          example: MEXICO
+        cedulas:
+          type: array
+          items:
+            $ref: '#/components/schemas/Cedulas'
+    
+    Cedulas:
+      type: object
+      properties:
+        cedula:
+          type: string
+          example: '00011479'
+        institution:
+          type: string
+          example: patito
+        careersDegrees:
+          type: string
+          example: medico cirujano
+
+    IdentityCedulaValidationResponse:
+      type: object
+      required: [results]
+      properties:
+        dateTime:
+          type: string
+          format: date-time
+          example: 2020-04-12T22:20:50.52Z
+          description: Date and time of the acknowledge. As defined by date-time - RFC3339.
+        operation:
+          type: string
+          example: request
+          enum: [request, consumption]
+          description: Cedula verification operation.
+        message:
+          type: string
+          example: The cedula verification request has been received.
+          description: Descriptive and human-readable message.
+        externalId:
+          type: string
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+          description: The identifier of the bank account validator request given by the API consumer (UUID).
+        subscriptionId:
+          type: string
+          example: 7c8a0230-36e0-43f4-9b7a-581dc55ea9c3
+          description: The API Hub event subscription identifier (UUID).
+        inquiryId:
+          type: string
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+          description: The account validator process identifier given by Círculo de Crédito. 
+    standardEnvelope:
+      type: object
+      required: [code, message, dateTime, externalId, data]
+      properties:
+        code:
+          type: string
+          example: "200"
+        message:
+          type: string
+          example: Success
+        dateTime:
+          type: string
+          format: date-time
+          example: "2025-10-09T16:30:15Z"
+        externalId:
+          type: string
+          format: uuid
+          description: Client-provided id used for tracing and correlation.
+          example: "002af621-997a-4b1c-8557-c4ae0ccb3041"
+        data:
+          type: object
+          additionalProperties: false
+
+    errorItem:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Error code (e.g., 403.1)
+          example: "403.1"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "We could not verify the signature, x-signature is invalid"
+
+    errorResponse:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/errorItem'
+
+    consolidatedResultsData:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/sourceResult'
+
+    sourceResult:
+      type: object
+      required: [source, status, data, additionalInfo]
+      properties:
+        source:
+          type: string
+          description: Data source/provider
+          enum: [RENAPO, INE, SEP]
+        status:
+          type: string
+          enum: [SUCCESS, NOT_FOUND, ERROR, PENDING, PARTIAL]
+        data:
+          type: object
+          description: Provider-specific payload (returned verbatim from the vendor)
+        additionalInfo:
+          type: object
+          description: Additional information such as reference identifiers
+          properties:
+            referenceId:
+              type: string
+              example: "EXT-12345"
+
+    identityValidationRequest:
+      type: object
+      required: [externalId]
+      properties:
+        externalId:
+          type: string
+          format: uuid
+          description: Client-provided id used for tracing and correlation.
+        renapoQuery:
+          $ref: '#/components/schemas/renapoQuery'
+        ineQuery:
+          $ref: '#/components/schemas/ineQuery'
+        sepQuery:
+          $ref: '#/components/schemas/sepQuery'
+          
+    IdentityCedulaValidationRequest:
+      type: object
+      required: [cedulaValidator]
+      properties:
+        cedulaValidator:
+          $ref: '#/components/schemas/CedulaValidator'
+          
+    CedulaValidator:
+      type: object
+      required:
+       - 'externalId'
+       - 'subscriptionId'
+       - 'curp'
+      properties:
+        externalId:
+          type: string
+          maxLength: 36
+          minLength: 36
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+          description: The identifier of the cedula validator request given by the API consumer (UUID).
+        subscriptionId:
+          type: string
+          maxLength: 36
+          minLength: 36
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          example: 7c8a0230-36e0-43f4-9b7a-581dc55ea9c3
+          description: The API Hub event subscription identifier (UUID).
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$'
+          example: "Juan"
+          description: Name or Names
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$'
+          example: "Pruebas"
+          description: Last name
+        secondLastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$'
+          example: "Pruebas"
+          description: Second last name
+        curp:
+          type: string
+          minLength: 18
+          maxLength: 18
+          pattern: '^[A-Za-z0-9]{18,18}$'
+          example: SSSS010101SSSSXXXX
+          description: Mexican CURP
+          
+    CedulaValidatorGet:
+      type: object
+      required:
+       - 'externalId'
+       - 'subscriptionId'
+       - 'curp'
+      properties:
+        externalId:
+          type: string
+          maxLength: 36
+          minLength: 36
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+          description: The identifier of the cedula validator request given by the API consumer (UUID).
+        subscriptionId:
+          type: string
+          maxLength: 36
+          minLength: 36
+          pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          example: 7c8a0230-36e0-43f4-9b7a-581dc55ea9c3
+          description: The API Hub event subscription identifier (UUID).
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$'
+          example: Juan
+          description: Name or business name
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$'
+          example: Ocho
+          description: Last name
+        secondLastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[A-Za-z àèìòùÀÈÌÒÙáéíóúýÁÉÍÓÚÝâêîôûÂÊÎÔÛãñõÃÑÕäëïöüÿÄËÏÖÜŸçÇßØøÅåÆæœ& 0-9]{1,100}$'
+          example: Nueve
+          description: Second last name
+        curp:
+          type: string
+          minLength: 18
+          maxLength: 18
+          pattern: '^[A-Za-z0-9]{18,18}$'
+          example: SSSS010101SSSSXXXX
+          description: Mexican CURP
+
+    renapoQuery:
+      type: object
+      properties:
+        curp:
+          type: string
+          description: Unique Population Registry Code (CURP).
+          pattern: '^[A-Z]{4}\d{6}[A-Z]{6}[A-Z0-9]\d$'
+          example: "SSSS010101SSSSXXXX"
+        personalData:
+          type: object
+          properties:
+            paternalSurname:
+              type: string
+              description: Paternal Surname of the subject.
+              example: "Pruebas"
+            maternalSurname:
+              type: string
+              description: Maternal Surname of the subject.
+              example: "Pruebas"
+            firstName:
+              type: string
+              description: First name of the subject.
+              example: "Juan"
+            sex:
+              type: string
+              description: Gender (H - Male, M - Female).
+              enum: [H, M]
+              example: "H"
+            dateOfBirth:
+              type: string
+              description: Date of Birth in YYYY-MM-DD format only.
+              pattern: '^\d{4}-\d{2}-\d{2}$'
+              example: "01/01/2010"
+            subdivision:
+              type: string
+              description: >
+                Added in request without CURP. City subdivision/state code as it appears on the ID.
+                Only catalog **code** is accepted (e.g., AS).
+                Catalog:
+                  - AGUASCALIENTES (AS)
+                  - BAJA CALIFORNIA (BC)
+                  - BAJA CALIFORNIA SUR (BS)
+                  - MORELOS (MS)
+                  - NAYARIT (NT)
+                  - NUEVO LEÓN (NL)
+                  - CAMPECHE (CC)
+                  - OAXACA (OC)
+                  - COAHUILA (CL)
+                  - PUEBLA (PL)
+                  - COLIMA (CM)
+                  - QUERÉTARO (QT)
+                  - CHIAPAS (CS)
+                  - QUINTANA ROO (QR)
+                  - CHIHUAHUA (CH)
+                  - SAN LUIS POTOSI (SP)
+                  - DISTRITO FEDERAL (DF)
+                  - SINALOA (SL)
+                  - DURANGO (DG)
+                  - SONORA (SR)
+                  - GUANAJUATO (GT)
+                  - TABASCO (TC)
+                  - GUERRERO (GR)
+                  - TAMAULIPAS (TS)
+                  - HIDALGO (HG)
+                  - TLAXCALA (TL)
+                  - JALISCO (JC)
+                  - VERACRUZ (VZ)
+                  - MÉXICO (MC)
+                  - YUCATÁN (YN)
+                  - MICHOACÁN (MN)
+                  - ZACATECAS (ZS)
+                  - NACIDO EN EL EXTRANJERO (NE)
+              enum:
+                - AS - BC - BS - MS - NT - NL - CC - OC - CL - PL - CM - QT - CS - QR - CH - SP - DF - SL - DG - SR - GT - TC - GR - TS - HG - TL - JC - VZ - MC - YN - MN - ZS - NE
+              example: "MN"
+          additionalProperties: false
+
+    ineQuery:
+      type: object
+      properties:
+        cic:
+          type: string
+          description: CIC number of the INE credential.
+          example: "123456789"
+        ocr:
+          type: string
+          description: OCR number of the INE credential (for card types C–F).
+          example: "1234567891234"
+        electorKey:
+          type: string
+          description: Elector key (Clave de Elector).
+          example: "SSSSSS99999999S000"
+        issuingNumber:
+          type: string
+          description: Issue number (Número de emisión).
+          example: "03"
+        registrationYear:
+          type: integer
+          description: Year of registration on the INE credential.
+          example: 2009
+
+    sepQuery:
+      type: object
+      properties:
+        degreeNumber:
+          type: string
+          description: 7 or 8 digits of the SEP professional identification number.
+          pattern: '^\d{7,8}$'
+          example: "12345678"
+            
+            
+            

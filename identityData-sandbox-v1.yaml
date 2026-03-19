@@ -1,0 +1,677 @@
+openapi: 3.0.1
+info:
+  title: API Identity Data Sandbox
+  description: <p>Identity Data API es un facilitador de funcionalidades que engloba información de distintas fuentes de acceso públicas y privadas en el progreso del producto para realizar la validación de identidad del Cliente. El objetivo es que a través de una sola API, el usuario puede acceder, corroborar y validar la identidad de la persona haciendo la solicitud de un producto o servicio.</p><br><img src='https://developer.circulodecredito.com.mx/sites/default/files/2020-10/circulo_de_credito-apihub.png'  width='240'/></p><br/>
+  termsOfService: https://developer.circulodecredito.com.mx/legal-mx
+  contact:
+    email: api@circulodecredito.com.mx
+  license:
+    name: Derechos reservados Circulo de Crédito 2023
+    url: http://www.circulodecredito.com.mx
+  version: "1.0"
+
+servers:
+  - url: https://services.circulodecredito.com.mx
+host: services.circulodecredito.com.mx
+basePath: /sandbox/v1/identityData
+paths:
+  /identity-data/validations:
+    post:
+      tags:
+        - Validations Identity Data
+      operationId: CreateCredential
+      parameters:
+        - name: x-api-key
+          in: header
+          description: ConsumerKey obtenido desde el portal de desarrolladores
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/request'
+        required: false
+      responses:
+        200:
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/responseSEP'
+                  - $ref: '#/components/schemas/ResponseRenapo'
+                  - $ref: '#/components/schemas/responseINE'
+              examples:
+                RENAPO:
+                  summary: RENAPO
+                  description: 'An example of RENAPO'
+                  value:
+                    code: 200
+                    message: "Success"
+                    datetime: "2023-12-27T16:51:48.994Z"
+                    requestId: "17b27ba5-a9e2-4b00-986a-e9ad077e9a9e"
+                    data:
+                      codigoRespuesta: "00"
+                      descripcionRespuesta: "TRANSACCION EXITOSA"
+                      referencia: "TEST-CURP02"
+                      respuestaRENAPO:
+                        CURPStatus:
+                          statusOper: "EXITOSO"
+                          message: "LA OPERACION SE EJECUTO."
+                          tipoError: ""
+                          codigoError: ""
+                          sessionID: "y7H8d_Z-4u685On5rnq6YY3syZGKm2GH16UtpY8_2CMdKCbYZy6q!1654132111!1537539044990"
+                          resultCURPS:
+                            CURP: "XXXX910225XXXXXX09"
+                            apellidoPaterno: "XXXX"
+                            apellidoMaterno: "XXXX"
+                            nombres: "XXXX"
+                            sexo: "H"
+                            fechNac: "XX/XX/XXXX"
+                            nacionalidad: "MEX"
+                            docProbatorio: "1"
+                            anioReg: "9999"
+                            foja: ""
+                            tomo: ""
+                            libro: "9999"
+                            numActa: "99999"
+                            CRIP: "090050291018921"
+                            numEntidadReg: "09"
+                            cveMunicipioReg: "999"
+                            numRegExtranjeros: ""
+                            folioCarta: ""
+                            cveEntidadNac: "DF"
+                            cveEntidadEmisora: "99999"
+                            statusCurp: "RCC"
+                            FolioCertificado: ""
+
+
+                SEP:
+                  summary: SEP
+                  description: 'An example of SEP'
+                  value:
+                    code: 200
+                    message: "Success"
+                    datetime: "2023-12-27T16:51:48.994Z"
+                    requestId: "17b27ba5-a9e2-4b00-986a-e9ad077e9a9e"
+                    data:
+                      cedulas:
+                        institucion: "INSTITUTO POLITÉCNICO NACIONAL"
+                        nombres: "ABIGAIL"
+                        apellidoPaterno: "PEREZ"
+                        apellidoMaterno: "LOPEZ"
+                        cedula: "XXXXXXXX"
+                        sexo: "F"
+                        tipo: "C1"
+                        titulo: "LICENCIATURA EN INGENIERÍA EN INFORMÁTICA"
+                      códigoValidacion: "cp1619567036.099915"
+                      estatus: "OK"
+                      códigoMensaje: "0"
+
+                INE:
+                  summary: INE
+                  description: 'An example of INE'
+                  value:
+                    code: 200
+                    message: "Success"
+                    datetime: "2023-12-27T16:51:48.994Z"
+                    requestId: "17b27ba5-a9e2-4b00-986a-e9ad077e9a9e"
+                    data:
+                      estatus: "OK"
+                      mensaje: "Está vigente como medio de identificación y puede votar"
+                      codigoValidacion: "vi1648070031.2717297"
+                      claveMensaje: "3"
+                      claveElector: "QWERTY12345678M001"
+                      numeroEmision: "4"
+                      anioRegistro: "2010"
+                      anioEmision: "2017"
+                      vigencia: "31 de diciembre de 2027"
+                      ocr: "1234567890020"
+                      cic: "123456789"
+                      distritoFederal: "11"
+                      informacionAdicional: "¡Esta no es tu última credencial! realizaste un trámite de actualización de datos por lo que tu consulta fue con una credencial anterior Realiza una nueva consulta con tu última credencial"
+
+        400:
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/responseUnauthorized'
+      x-codegen-request-body-name: body
+
+
+components:
+  schemas:
+    request:
+      type: object
+      description: 'La estructura de request es unica para cualquier tipo de validación,
+        a continuación se indica casos soportados para cada validación especifica, y en que 
+        solicitud de validacion son tomados en cuenta.
+        <h4>Validacion meditante SEP</h4>
+        Se puede enviar cualquiera de las siguientes combinaciones
+        1.- Cedula
+        3.- Cedula mas nombre completo
+        <h4>Validacion meditante RENAPO</h4>
+        1.- Para realizar consultas por CURP únicamente se debe incluir el campo “curp” 
+        2.- En caso de querer realizar consulta de CURP por datos, se deben incluir los campos “nombre”, ”apellidoPaterno”, ”apellidoMaterno”, “sexo”, “fechaNacimiento” y “entidadNacimiento”
+        <h4>Validacion meditante INE</h4>
+        <table>
+        
+        <thead><tr><td>Atributo</td><td>Uso</td><td>Tipo</td><td>Descripcion</td></tr></thead>
+        <tr><td>cic</td><td>Obligatorio si es tipo D, E o F </td><td>String</td><td>Número CIC de la credencial de elector </td></tr>
+        <tr><td>orc</td><td>Obligatorio si es IFE </td><td>String</td><td>Número OCR de la credencial de elector </td></tr>
+        <tr><td>claveElector</td><td>Obligatorio si es tipo A, B o C </td><td>String</td><td>Clave de elector </td></tr>
+        <tr><td>numeroEmision</td><td>Obligatorio si es tipo A, B o C </td><td>String</td><td>Número de emisión de la credencial de elector </td></tr>
+        <tr><td>identificadorCiudadano</td><td>Obligatorio si es INE </td><td>String</td><td><Número de identificador ciudadano /td></tr>
+        <tr><td>referencia</td><td>Obligatorio</td><td></td><td>Número de referencia hecho aleatoriamente </td></tr>
+        <tr><td>institucion</td><td>Obligatorio</td><td></td><td>Institución que envía la solicitud </td>Fecha cuando se hace la solicitud </tr>
+        <tr><td>fecha</td><td></td>Obligatorio<td></td><td></td></tr>
+
+        </table>
+        '
+      required:
+        - 'infoProvider'
+        - 'requestId'
+      properties:
+        infoProvider:
+          description: 'Entidad sobre la cual se ejecutara la validación. Debe ser una del enum'
+          type: string
+
+          enum:
+            - RENAPO
+            - INE
+            - SEP
+        nombres:
+          type: string
+          minLength: 0
+          pattern: '^[A-ZáéíóúñÁÉÍÓÚÑ\s]+$'
+          description: Nombres de la persona en mayusculas
+          example: 'ABIGAIL'
+        apellidoPaterno:
+          type: string
+          nullable: true
+          minLength: 0
+          pattern: '^[A-ZáéíóúñÁÉÍÓÚÑ\s]+$'
+          description: Apellido paterno de la persona en mayusculas
+          example: 'PEREZ'
+        apellidoMaterno:
+          type: string
+          minLength: 0
+          pattern: '^[A-ZáéíóúñÁÉÍÓÚÑ\s]+$'
+          description: Apellido materno de la persona en mayusculas
+          example: 'LOPEZ'
+        fechaNacimiento:
+          type: string
+          pattern: '^([0-2][0-9]|3[0-1])(\/|-)(0[1-9]|1[0-2])\2(\d{4})$'
+          minLength: 0
+          maxLength: 10
+          description: 'DD/MM/AAAA. Ejemplo: 02/08/1990 (2 de agosto de 1990)'
+          example: '02/08/1990'
+        curp:
+          type: string
+          minLength: 0
+          maxLength: 18
+          description: 'CURP (loan/credit applicant MX Id).'
+          example: 'BADD110313HCMLNS09'
+        sexo:
+          type: string
+          minLength: 0
+          maxLength: 1
+          pattern: '^[MH\s]+$'
+          description: '“H” para hombre “M” para mujer'
+          example: 'H'
+        entidadNacimiento:
+          type: string
+          minLength: 0
+          maxLength: 2
+          pattern: '^[A-Z\s]+$'
+          description: 'Utilizar el código correspondiente al estado de nacimiento (Catálogo de entidades federativas) State (Estado)<table><thead><tr><th>Identifier</th><th>Name</th></tr></thead><tbody><tr><td>AS</td><td>AGUASCALIENTES</td></tr><tr><td>BC</td><td>BAJA
+            CALIFORNIA NORTE</td></tr><tr><td>BS</td><td>BAJA CALIFORNIA SUR</td></tr><tr><td>CC</td><td>CAMPECHE</td></tr><tr><td>MC</td><td>CIUDAD
+            DE MÉXICO</td></tr><tr><td>CS</td><td>CHIAPAS</td></tr><tr><td>CH</td><td>CHIHUAHUA</td></tr><tr><td>CL</td><td>COHAHUILA</td></tr><tr><td>CM</td><td>COLIMA</td></tr><tr><td>DF</td><td>DISTRITO
+            FEDERAL</td></tr><tr><td>DG</td><td>DURANGO</td></tr><tr><td>GT</td><td>GUANAJUATO</td></tr><tr><td>GR</td><td>GUERRERO</td></tr><tr><td>HG</td><td>HIDALGO</td></tr><tr><td>JC</td><td>JALISCO</td></tr><tr><td>MC</td><td>MÉXICO</td></tr><tr><td>MN</td><td>MICHOCÁN</td></tr><tr><td>MS</td><td>MORELOS</td></tr><tr><td>NT</td><td>NAYARIT</td></tr><tr><td>NL</td><td>NUEVO
+            LEÓN</td></tr><tr><td>OC</td><td>OXACA</td></tr><tr><td>PL</td><td>PUEBLA</td></tr><tr><td>QT</td><td>QUERÉTARO</td></tr><tr><td>QR</td><td>QUINTANA
+            ROO</td></tr><tr><td>SP</td><td>SAN LUIS POTOSÍ</td></tr><tr><td>SL</td><td>SINALOA</td></tr><tr><td>SR</td><td>SONORA</td></tr><tr><td>TC</td><td>TABASCO</td></tr><tr><td>TS</td><td>TAMAULIPAS</td></tr><tr><td>TL</td><td>TLAXCALA</td></tr><tr><td>VZ</td><td>VERACRUZ</td></tr><tr><td>YN</td><td>YUCATÁN</td></tr><tr><td>ZS</td><td>ZACATECAS</td></tr><tr><td>NE</td><td>NACIDO EN EL EXTRANJERO</td></tr></tbody></table>'
+          example: JC
+        numeroCedula:
+          type: string
+          minLength: 0
+          pattern: '^^[0-9]+$'
+          description: 7 u 8 dígitos del número de cédula profesional de la SEP
+          example: 'XXXXXXXX'
+        cic:
+          type: string
+          minLength: 0
+          pattern: '^[0-9]+$'
+          description: Número CIC de la credencial de elector
+          example: '123456789'
+        ocr:
+          type: string
+          minLength: 0
+          pattern: '^[0-9]+$'
+          description: Número OCR de la credencial de elector
+          example: '123456789'
+        claveElector:
+          type: string
+          minLength: 0
+          pattern: '^[0-9]+$'
+          description: Clave de elector
+          example: '123456789'
+        numeroEmision:
+          type: string
+          minLength: 0
+          pattern: '^[0-9]+$'
+          description: Número de emisión de la credencial de elector
+          example: '123456789'
+        identificadorCiudadano:
+          type: string
+          minLength: 0
+          pattern: '^[0-9]+$'
+          description: Número de identificador ciudadano
+          example: '987654321'
+        fecha:
+          type: string
+          minLength: 0
+          maxLength: 14
+          pattern: '^[0-9]+$'
+          description: Fecha cuando se hace la solicitud
+          example: '23112020173042'
+        requestId:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          description: The identifier of the identity data request given
+            by the API consumer (UUID).
+          format: uuid
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+
+
+    ComponenteCliente:
+      type: object
+      properties:
+        nombreAplicativo:
+          type: string
+          example: 'APP_FMP'
+        versionAplicativo:
+          type: string
+          example: 'V1.0'
+
+    ResponseRenapo:
+      required:
+        - codigoRespuesta
+        - descripcionRespuesta
+        - referencia
+        - code
+        - message
+        - datetime
+        - requestId
+        - data
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: Success
+        datetime:
+          type: string
+          example: 2023-12-27T16:52:16.308Z
+        requestId:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          description: The identifier of the identity darta request given
+            by the API consumer (UUID).
+          format: uuid
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+        data:
+          $ref: '#/components/schemas/dataRenapo'
+    dataRenapo:
+      type: object
+      properties:
+        codigoRespuesta:
+          type: string
+          maxLength: 2
+          minLength: 2
+          description: 'Posibles valores: 00: TRANSACCIÓN EXITOSA 01: SIN RESPUESTA DE RENAPO, 02: SERVIDOR SVBI NO RESPONDE, 03: LOS DATOS SON INCORRECTOS, 04: LA REFERENCIA YA EXISTE, 05: ERROR INESPERADO'
+          example: '00'
+        descripcionRespuesta:
+          type: string
+          description: 'Posibles valores:
+                        -TRANSACCIÓN EXITOSA
+                        -SIN RESPUESTA DE RENAPO
+                        -SERVIDOR SVBI NO RESPONDE
+                        -LOS DATOS SON INCORRECTOS
+                        -LA REFERENCIA YA EXISTE
+                        -ERROR INESPERADO'
+          example: 'TRANSACCION EXITOSA'
+        referencia:
+          type: string
+          example: 'TEST-CURP02'
+        respuestaRENAPO:
+          $ref: '#/components/schemas/RespuestaRENAPO'
+
+    RespuestaRENAPO:
+      type: object
+      properties:
+        CURPStatus:
+          $ref: '#/components/schemas/CURPStatus'
+
+    CURPStatus:
+      type: object
+      properties:
+        statusOper:
+          type: string
+          example: 'EXITOSO'
+        message:
+          type: string
+          example: 'LA OPERACION SE EJECUTO.'
+        tipoError:
+          type: string
+          example: ''
+        codigoError:
+          type: string
+          example: ''
+        sessionID:
+          type: string
+          example: 'y7H8d_Z-4u685On5rnq6YY3syZGKm2GH16UtpY8_2CMdKCbYZy6q!1654132111!1537539044990'
+        resultCURPS:
+          $ref: '#/components/schemas/ResultCURPS'
+
+    ResultCURPS:
+      type: object
+      properties:
+        CURP:
+          type: string
+          example: 'XXXX910225XXXXXX09'
+        apellidoPaterno:
+          type: string
+          example: 'XXXX'
+        apellidoMaterno:
+          type: string
+          example: 'XXXX'
+        nombres:
+          type: string
+          example: 'XXXX'
+        sexo:
+          type: string
+          example: 'H'
+        fechNac:
+          type: string
+          example: 'XX/XX/XXXX'
+        nacionalidad:
+          type: string
+          example: 'MEX'
+        docProbatorio:
+          type: string
+          example: '1'
+        anioReg:
+          type: string
+          example: '9999'
+        foja:
+          type: string
+          example: ''
+        tomo:
+          type: string
+          example: ''
+        libro:
+          type: string
+          example: '9999'
+        numActa:
+          type: string
+          example: '99999'
+        CRIP:
+          type: string
+          example: '090050291018921'
+        numEntidadReg:
+          type: string
+          example: '09'
+        cveMunicipioReg:
+          type: string
+          example: '999'
+        numRegExtranjeros:
+          type: string
+          example: ''
+        folioCarta:
+          type: string
+          example: ''
+        cveEntidadNac:
+          type: string
+          example: 'DF'
+        cveEntidadEmisora:
+          type: string
+          example: '99999'
+        statusCurp:
+          type: string
+          example: 'RCC'
+        FolioCertificado:
+          type: string
+          example: ''
+
+
+    responseSEP:
+      required:
+        - institucion
+        - nombres
+        - apellidoPaterno
+        - apellidoMaterno
+        - cedula
+        - sexo
+        - tipo
+        - titulo
+        - cedulas
+        - códigoValidacion
+        - estatus
+        - códigoMensaje
+        - code
+        - message
+        - datetime
+        - requestId
+        - data
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: Success
+        datetime:
+          type: string
+          example: 2023-12-27T16:52:16.308Z
+        requestId:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          description: The identifier of the identity darta request given
+            by the API consumer (UUID).
+          format: uuid
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+        data:
+          $ref: '#/components/schemas/dataSep'
+
+    dataSep:
+      type: object
+      properties:
+        cedulas:
+          type: array
+          description: Arreglo con información de cédulas
+          items:
+            $ref: '#/components/schemas/cedulas'
+        códigoValidacion:
+          type: string
+          description: Código único de ejecución de la validación. El objetivo de este código es guardar un registro de validaciones solicitadas
+          example: 'cp1619567036.099915'
+        estatus:
+          type: string
+          description: OK
+          example: 'OK'
+        códigoMensaje:
+          type: string
+          description: código del mensaje
+          example: '0'
+
+    cedulas:
+      type: object
+      properties:
+        institucion:
+          type: string
+          description: Institución que solicitó la cédula
+          example: 'INSTITUTO POLITÉCNICO NACIONAL'
+        nombres:
+          type: string
+          description: Nombres de la persona
+          example: 'ABIGAIL'
+        apellidoPaterno:
+          type: string
+          description: Apellido paterno de la persona
+          example: 'PEREZ'
+        apellidoMaterno:
+          type: string
+          description: Apellido materno de la persona
+          example: 'LOPEZ'
+        cedula:
+          type: string
+          description: Número de cédula
+          example: 'XXXXXXXX'
+        sexo:
+          type: string
+          description: Sexo de la persona {“M” | “F” }
+          example: 'F'
+        tipo:
+          type: string
+          description: Tipo de cédula { “C1” | “A1” }
+          example: 'C1'
+        titulo:
+          type: string
+          description: Nombre del título
+          example: 'LICENCIATURA EN INGENIERÍA EN INFORMÁTICA'
+
+    responseINE:
+      required:
+        - mensaje
+        - codigoValidacion
+        - estatus
+        - claveMensaje
+        - code
+        - message
+        - datetime
+        - requestId
+        - data
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: Success
+        datetime:
+          type: string
+          example: 2023-12-27T16:52:16.308Z
+        requestId:
+          type: string
+          pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          description: The identifier of the identity darta request given
+            by the API consumer (UUID).
+          format: uuid
+          example: 391d151f-1cac-44e7-a05b-79a1199621d6
+        data:
+          $ref: '#/components/schemas/dataIne'
+
+    dataIne:
+      type: object
+      properties:
+        estatus:
+          type: string
+          description: ok, sirva para saber que es correcto el estatus de la credencial
+          example: 'OK'
+        mensaje:
+          type: string
+          description: mnensaje de ine
+          example: 'Está vigente como medio de identificación y puede votar'
+        codigoValidacion:
+          type: string
+          description: Código único de ejecución de la validación. El objetivo de este código es guardar un registro de validaciones solicitadas.
+          example: 'vi1648070031.2717297'
+        claveMensaje:
+          type: string
+          description: código del mensaje
+          example: '3'
+        claveElector:
+          type: string
+          description: Número de clave de elector
+          example: 'QWERTY12345678M001'
+        numeroEmision:
+          type: string
+          description: Número de emisión de la credencial
+          example: '4'
+        anioRegistro:
+          type: string
+          description: Año de registro de la credencial
+          example: '2010'
+        anioEmision:
+          type: string
+          description: Año de emisión de la credencial
+          example: '2017'
+        vigencia:
+          type: string
+          description: Vigencia de la credencial
+          example: '31 de diciembre de 2027'
+        ocr:
+          type: string
+          description: OCR de la credencial.
+          example: '1234567890020'
+        cic:
+          type: string
+          description: Número CIC de la credencial de elector
+          example: '123456789'
+        distritoFederal:
+          type: string
+          description: Número de distrito federal
+          example: '11'
+        informacionAdicional:
+          type: string
+          description: En caso de que exista información adicional aparecerá este campo
+          example: '¡Esta no es tu última credencial!, realizaste un trámite de actualización de datos, por lo que tu consulta fue con una credencial anterior Realiza una nueva consulta con tu última credencial'
+
+
+    Error:
+      type: object
+      properties:
+        estatus:
+          type: string
+          description: sirve para saber que es erróneo el estatus de la respuesta
+          example: 'ERROR'
+        mensaje:
+          type: string
+          description: error message.
+          example: 'Datos incorrectos.'
+      description: Error
+    Errors:
+      type: object
+      properties:
+        errors:
+          type: array
+          description: List of errors.
+          items:
+            $ref: '#/components/schemas/Error'
+      description: A list of errors.
+
+    responseUnauthorized:
+      title: responseUnauthorized
+      type: object
+      properties:
+        estatus:
+          type: string
+          description: sirve para saber que es erróneo el estatus de la respuesta
+          example: 'ERROR'
+        mensaje:
+          type: string
+          description: error message.
+          example: 'Usuario o contraseña incorrecto.'

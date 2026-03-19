@@ -1,0 +1,85 @@
+{
+	"info": {
+		"_postman_id": "3eaf7f69-1c36-464d-b7d8-183b1f242eb1",
+		"name": "Security Test",
+		"description": "# Welcome!\n\nThis API give you the opportunity to make a request to our Production environment for the first time. In the following sections we will guide you step by step to achieve success.\n\n# First of all\n\nMake sure you downloaded the \"**Postmant environment**\" from step 4 of API HUB, by clicking on it.\n\n<img src=\"https://content.pstmn.io/917047b3-8410-4ab6-adaf-6bc3727c2a69/aW1hZ2UucG5n\" width=\"1033\" height=\"496\">\n\n# Setting environment\n\nAfter importing the environment you need to go to the \"**Environments**\" section in the top left corner of your Postman client and configure the following variables:\n\n<img src=\"https://content.pstmn.io/e2583bad-c675-492c-ba2b-40d32965a75c/aW1hZ2UucG5n\" alt=\"\" height=\"704\" width=\"2779\">\n\nNote that the signature variable is the only one without its value, this is ok. To configure the \"**private_key**\" and \"**cdc_public_key**\" please see steps 5 and 6, respectively. To configure the \"**x-api-key**\" see step 3 of API Integration Guide.\n\n# Exploring colecction.\n\nIf you go to \"**Pre-request Script**\" you will find a Java Script code that sets the \"**signature**\" variable using the public and private keys, feel free to explore it. Now, check the \"**Headers**\" tab is set up like the following image:\n\n<img src=\"https://content.pstmn.io/a2a6bfa8-9bc7-47ac-8c87-619eeb189695/aW1hZ2UucG5n\" width=\"2093\" height=\"807\">\n\nFinally you must select the \"Security Test\" environment in the top right corner (see the last image). At this point you are able to send a request to our API and get a success response. Lets try it!\n\n# Send a request!\n\nClick the \"send\" button and you'll receive a \"Hello World!\" response.\n\nNow continue with step 7 to apply for a production permit. Congratulations!",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "20885411",
+		"_collection_link": "https://orange-rocket-155215.postman.co/workspace/1d74d551-79c4-4745-b013-249b53aeecba/collection/20885411-3eaf7f69-1c36-464d-b7d8-183b1f242eb1?action=share&source=collection_link&creator=20885411"
+	},
+	"item": [
+		{
+			"name": "/v1/securitytest",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"function doHttpSig() {",
+							"    var navigator = {};",
+							"    var window = {};",
+							"    eval(pm.environment.get(\"jsrsasign-js\"));",
+							"    ",
+							"    var sig = new KJUR.crypto.Signature({\"alg\": \"SHA256withECDSA\", \"prov\": \"cryptojs/jsrsa\"});",
+							"    sig.init({d: pm.environment.get(\"private_key\"), curve: \"secp384r1\"});",
+							"    sig.updateString(request.data);",
+							"    postman.setEnvironmentVariable(\"signature\", sig.sign());",
+							"}",
+							"",
+							"if (!pm.environment.has(\"jsrsasign-js\")) {",
+							"    console.log(\"La biblioteca jsrasign aún no se ha descargado. Descargando ahora.\");",
+							"    pm.sendRequest({",
+							"        url: \"https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/8.0.12/jsrsasign-all-min.js\",",
+							"        method: \"GET\",",
+							"        body: {}",
+							"    }, function (err, res) {",
+							"        postman.setEnvironmentVariable(\"jsrsasign-js\", res.text());",
+							"        doHttpSig();",
+							"    });",
+							"} else {",
+							"    doHttpSig();",
+							"}",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "x-api-key",
+						"value": "{{x-api-key}}",
+						"type": "text"
+					},
+					{
+						"key": "x-signature",
+						"value": "{{signature}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"attribute\":\"Hello World!\"}"
+				},
+				"url": {
+					"raw": "{{url}}/v1/securitytest",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"v1",
+						"securitytest"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
