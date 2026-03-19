@@ -131,6 +131,10 @@ class CirculoDeCredito:
             datos = response.get("datos", {})
             resultado_curp = datos.get("respuestaRENAPO", {}).get("CURPStatus", {}).get("resultCURPS", {})
             
+            # Detectar si es datos de prueba/dummy
+            curp_retornado = resultado_curp.get("CURP", "")
+            es_datos_prueba = curp_retornado.startswith("PRUEBA")
+            
             return {
                 "curp": resultado_curp.get("CURP"),
                 "apellidoPaterno": resultado_curp.get("apellidoPaterno"),
@@ -140,7 +144,8 @@ class CirculoDeCredito:
                 "fechaNacimiento": resultado_curp.get("fechNac"),
                 "nacionalidad": resultado_curp.get("nacionalidad"),
                 "entidadNacimiento": resultado_curp.get("cveEntidadNac"),
-                "statusCurp": resultado_curp.get("statusCurp")
+                "statusCurp": resultado_curp.get("statusCurp"),
+                "es_datos_prueba": es_datos_prueba  # Indicador de datos dummy
             }
         except Exception as e:
             print(f"Error extrayendo datos: {e}")
