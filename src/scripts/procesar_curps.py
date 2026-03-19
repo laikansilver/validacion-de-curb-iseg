@@ -2,7 +2,6 @@
 """
 Procesador de múltiples CURPs desde archivo CSV o XLSX
 Valida cada CURP y indica cuáles son válidos y cuáles no
-Usando procesamiento paralelo para mayor velocidad
 """
 
 import csv
@@ -11,8 +10,6 @@ import json
 from pathlib import Path
 from datetime import datetime
 from openpyxl import load_workbook
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 
 # Agregar ruta para imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
@@ -30,56 +27,15 @@ client = CirculoDeCredito(
     base_url=cdc_config.get("base_url")
 )
 
-# Lock para thread-safety
-print_lock = threading.Lock()
-
-
-def validar_curp_individual(numero: int, curp: str) -> dict:
-    """Valida un CURP individual (para uso en ThreadPoolExecutor)"""
-    try:
-        exitoso, respuesta = client.validate_curp(curp)
-        
-        if exitoso:
-            datos = client.extract_data(respuesta)
-            if datos and datos.get("curp"):
-                return {
-                    "numero": numero,
-                    "curp": curp,
-                    "estado": "REGISTRADO",
-                    "datos": datos,
-                    "respuesta_completa": respuesta
-                }
-            else:
-                return {
-                    "numero": numero,
-                    "curp": curp,
-                    "estado": "NO_ENCONTRADO",
-                    "razon": "CURP no registrado ante el gobierno"
-                }
-        else:
-            return {
-                "numero": numero,
-                "curp": curp,
-                "estado": "ERROR",
-                "error": respuesta.get("error", str(respuesta))
-            }
-    except Exception as e:
-        return {
-            "numero": numero,
-            "curp": curp,
-            "estado": "ERROR",
-            "error": str(e)
-        }
-
 
 def validar_lote_curps(archivo_entrada: str) -> dict:
     """
-    Procesa un CSV o XLSX con múltiples CURPs y valida cada uno EN PARALELO
+    Procesa un CSV o XLSX con múltiples CURPs y valida cada uno
     
     Espera columna 'curp' en el archivo
     """
     print("=" * 80)
-    print("📊 PROCESADOR DE MÚLTIPLES CURPs (PARALELO)")
+    print("📊 PROCESADOR DE MÚLTIPLES CURPs")
     print("=" * 80)
     print()
     
@@ -91,14 +47,17 @@ def validar_lote_curps(archivo_entrada: str) -> dict:
     print(f"📂 Archivo: {archivo.name}")
     print()
     
+    # Listas para resultados
+    validos = []
+    invalidos = []
+    errores = []
+    
     # Detectar tipo de archivo
     es_excel = archivo.suffix.lower() == ".xlsx"
     
-    # Leer todos los CURPs primero
-    curps_list = []
-    
     try:
         if es_excel:
+            # Procesar XLSX
             workbook = load_workbook(archivo)
             worksheet = workbook.active
             
@@ -112,14 +71,52 @@ def validar_lote_curps(archivo_entrada: str) -> dict:
                 print(f"   Columnas encontradas: {', '.join([str(h) for h in headers if h])}")
                 return None
             
+            # Obtener índice de la columna curp
             curp_index = next(i for i, h in enumerate(headers) if h.lower() == 'curp')
             
+            # Procesar filas
+            total = 0
             for idx, row in enumerate(worksheet.iter_rows(min_row=2, values_only=True), 1):
                 curp = row[curp_index] if curp_index < len(row) else None
-                if curp:
-                    curps_list.append((idx, str(curp).strip().upper()))
+                
+                if not curp:
+                    print(f"⏭️  Fila {idx}: VACÍO - omitida")
+                    continue
+                
+                curp = str(curp).strip().upper()
+                total = idx
+                print(f"🔍 [{idx}] Validando: {curp}...", end="", flush=True)
+                
+                # Validar
+                exitoso, respuesta = client.validate_curp(curp)
+                
+                if exitoso:
+                    datos = client.extract_data(respuesta)
+                    if datos and datos.get("curp"):
+                        print(" ✅ REGISTRADO")
+                        validos.append({
+                            "numero": idx,
+                            "curp_solicitado": curp,
+                            "datos": datos,
+                            "respuesta_completa": respuesta
+                        })
+                    else:
+                        print(" ❌ NO ENCONTRADO")
+                        invalidos.append({
+                            "numero": idx,
+                            "curp": curp,
+                            "razon": "CURP no registrado ante el gobierno"
+                        })
+                else:
+                    print(f" ❌ ERROR")
+                    errores.append({
+                        "numero": idx,
+                        "curp": curp,
+                        "error": respuesta.get("error", str(respuesta))
+                    })
         
         else:
+            # Procesar CSV
             with open(archivo, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 
@@ -128,61 +125,44 @@ def validar_lote_curps(archivo_entrada: str) -> dict:
                     print(f"   Columnas encontradas: {', '.join(reader.fieldnames)}")
                     return None
                 
+                total = 0
                 for idx, row in enumerate(reader, 1):
                     curp = row.get('curp', '').strip().upper()
-                    if curp:
-                        curps_list.append((idx, curp))
-        
-        print(f"📋 {len(curps_list)} CURPs a validar")
-        print()
-        
-        # Procesar en paralelo
-        validos = []
-        invalidos = []
-        errores = []
-        procesados = 0
-        
-        # Usar máximo 5 threads concurrentes para no sobrecargar la API
-        max_workers = 5
-        
-        print(f"⚙️  Iniciando validación paralela ({max_workers} threads)...")
-        print()
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(validar_curp_individual, num, curp): (num, curp) 
-                      for num, curp in curps_list}
-            
-            for future in as_completed(futures):
-                num, curp = futures[future]
-                resultado = future.result()
-                procesados += 1
-                
-                # Mostrar progreso
-                estado_icono = "✅" if resultado["estado"] == "REGISTRADO" else "❌" if resultado["estado"] == "NO_ENCONTRADO" else "⚠️"
-                print(f"🔍 [{resultado['numero']}] {curp}... {estado_icono} {resultado['estado']}")
-                
-                # Clasificar resultado
-                if resultado["estado"] == "REGISTRADO":
-                    validos.append({
-                        "numero": resultado["numero"],
-                        "curp_solicitado": curp,
-                        "datos": resultado["datos"],
-                        "respuesta_completa": resultado["respuesta_completa"]
-                    })
-                elif resultado["estado"] == "NO_ENCONTRADO":
-                    invalidos.append({
-                        "numero": resultado["numero"],
-                        "curp": curp,
-                        "razon": resultado.get("razon", "CURP no registrado")
-                    })
-                else:
-                    errores.append({
-                        "numero": resultado["numero"],
-                        "curp": curp,
-                        "error": resultado.get("error", "Error desconocido")
-                    })
-        
-        total = len(curps_list)
+                    
+                    if not curp:
+                        print(f"⏭️  Fila {idx}: VACÍO - omitida")
+                        continue
+                    
+                    total = idx
+                    print(f"🔍 [{idx}] Validando: {curp}...", end="", flush=True)
+                    
+                    # Validar
+                    exitoso, respuesta = client.validate_curp(curp)
+                    
+                    if exitoso:
+                        datos = client.extract_data(respuesta)
+                        if datos and datos.get("curp"):
+                            print(" ✅ REGISTRADO")
+                            validos.append({
+                                "numero": idx,
+                                "curp_solicitado": curp,
+                                "datos": datos,
+                                "respuesta_completa": respuesta
+                            })
+                        else:
+                            print(" ❌ NO ENCONTRADO")
+                            invalidos.append({
+                                "numero": idx,
+                                "curp": curp,
+                                "razon": "CURP no registrado ante el gobierno"
+                            })
+                    else:
+                        print(f" ❌ ERROR")
+                        errores.append({
+                            "numero": idx,
+                            "curp": curp,
+                            "error": respuesta.get("error", str(respuesta))
+                        })
         
         print()
         print("=" * 80)
@@ -203,10 +183,11 @@ def validar_lote_curps(archivo_entrada: str) -> dict:
             "errores": errores
         }
         
+    except csv.Error as e:
+        print(f"❌ Error al leer CSV: {e}")
+        return None
     except Exception as e:
         print(f"❌ Error inesperado: {e}")
-        import traceback
-        traceback.print_exc()
         return None
 
 
