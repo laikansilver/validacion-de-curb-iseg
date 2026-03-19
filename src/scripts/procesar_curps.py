@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Procesador de múltiples CURPs desde archivo CSV o XLSX
-Valida cada CURP y indica cuáles son válidos y cuáles no
+Procesador rápido de múltiples CURPs desde archivo CSV o XLSX
+Valida cada CURP en paralelo para mayor velocidad
 """
 
 import csv
@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 from openpyxl import load_workbook
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # Agregar ruta para imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
@@ -28,14 +30,52 @@ client = CirculoDeCredito(
 )
 
 
+def validar_curp_individual(numero: int, curp: str) -> dict:
+    """Valida un CURP individual (para ejecución en paralelo)"""
+    try:
+        exitoso, respuesta = client.validate_curp(curp)
+        
+        if exitoso:
+            datos = client.extract_data(respuesta)
+            if datos and datos.get("curp"):
+                return {
+                    "numero": numero,
+                    "curp": curp,
+                    "estado": "REGISTRADO",
+                    "datos": datos,
+                    "respuesta_completa": respuesta
+                }
+            else:
+                return {
+                    "numero": numero,
+                    "curp": curp,
+                    "estado": "NO_ENCONTRADO",
+                    "razon": "CURP no registrado ante el gobierno"
+                }
+        else:
+            return {
+                "numero": numero,
+                "curp": curp,
+                "estado": "ERROR",
+                "error": respuesta.get("error", str(respuesta))
+            }
+    except Exception as e:
+        return {
+            "numero": numero,
+            "curp": curp,
+            "estado": "ERROR",
+            "error": str(e)
+        }
+
+
 def validar_lote_curps(archivo_entrada: str) -> dict:
     """
-    Procesa un CSV o XLSX con múltiples CURPs y valida cada uno
+    Procesa un CSV o XLSX con múltiples CURPs en paralelo
     
     Espera columna 'curp' en el archivo
     """
     print("=" * 80)
-    print("📊 PROCESADOR DE MÚLTIPLES CURPs")
+    print("📊 PROCESADOR DE MÚLTIPLES CURPs (ACELERADO)")
     print("=" * 80)
     print()
     
@@ -47,147 +87,115 @@ def validar_lote_curps(archivo_entrada: str) -> dict:
     print(f"📂 Archivo: {archivo.name}")
     print()
     
-    # Listas para resultados
-    validos = []
-    invalidos = []
-    errores = []
-    
-    # Detectar tipo de archivo
-    es_excel = archivo.suffix.lower() == ".xlsx"
+    # Extraer CURPs del archivo
+    curps_lista = []
     
     try:
+        es_excel = archivo.suffix.lower() == ".xlsx"
+        
         if es_excel:
-            # Procesar XLSX
             workbook = load_workbook(archivo)
             worksheet = workbook.active
             
-            # Obtener encabezados
             headers = []
             for cell in worksheet[1]:
                 headers.append(cell.value)
             
             if 'curp' not in [h.lower() if h else None for h in headers]:
                 print(f"❌ Error: El Excel debe tener una columna 'curp'")
-                print(f"   Columnas encontradas: {', '.join([str(h) for h in headers if h])}")
                 return None
             
-            # Obtener índice de la columna curp
             curp_index = next(i for i, h in enumerate(headers) if h.lower() == 'curp')
             
-            # Procesar filas
-            total = 0
             for idx, row in enumerate(worksheet.iter_rows(min_row=2, values_only=True), 1):
                 curp = row[curp_index] if curp_index < len(row) else None
-                
-                if not curp:
-                    print(f"⏭️  Fila {idx}: VACÍO - omitida")
-                    continue
-                
-                curp = str(curp).strip().upper()
-                total = idx
-                print(f"🔍 [{idx}] Validando: {curp}...", end="", flush=True)
-                
-                # Validar
-                exitoso, respuesta = client.validate_curp(curp)
-                
-                if exitoso:
-                    datos = client.extract_data(respuesta)
-                    if datos and datos.get("curp"):
-                        print(" ✅ REGISTRADO")
-                        validos.append({
-                            "numero": idx,
-                            "curp_solicitado": curp,
-                            "datos": datos,
-                            "respuesta_completa": respuesta
-                        })
-                    else:
-                        print(" ❌ NO ENCONTRADO")
-                        invalidos.append({
-                            "numero": idx,
-                            "curp": curp,
-                            "razon": "CURP no registrado ante el gobierno"
-                        })
-                else:
-                    print(f" ❌ ERROR")
-                    errores.append({
-                        "numero": idx,
-                        "curp": curp,
-                        "error": respuesta.get("error", str(respuesta))
-                    })
+                if curp:
+                    curps_lista.append((idx, str(curp).strip().upper()))
         
         else:
-            # Procesar CSV
             with open(archivo, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 
                 if reader.fieldnames and 'curp' not in reader.fieldnames:
-                    print(f"❌ Error: El CSV debe tener una columna 'curp'")
-                    print(f"   Columnas encontradas: {', '.join(reader.fieldnames)}")
+                    print(f"❌ Error: El archivo debe tener una columna 'curp'")
                     return None
                 
-                total = 0
                 for idx, row in enumerate(reader, 1):
                     curp = row.get('curp', '').strip().upper()
-                    
-                    if not curp:
-                        print(f"⏭️  Fila {idx}: VACÍO - omitida")
-                        continue
-                    
-                    total = idx
-                    print(f"🔍 [{idx}] Validando: {curp}...", end="", flush=True)
-                    
-                    # Validar
-                    exitoso, respuesta = client.validate_curp(curp)
-                    
-                    if exitoso:
-                        datos = client.extract_data(respuesta)
-                        if datos and datos.get("curp"):
-                            print(" ✅ REGISTRADO")
-                            validos.append({
-                                "numero": idx,
-                                "curp_solicitado": curp,
-                                "datos": datos,
-                                "respuesta_completa": respuesta
-                            })
-                        else:
-                            print(" ❌ NO ENCONTRADO")
-                            invalidos.append({
-                                "numero": idx,
-                                "curp": curp,
-                                "razon": "CURP no registrado ante el gobierno"
-                            })
-                    else:
-                        print(f" ❌ ERROR")
-                        errores.append({
-                            "numero": idx,
-                            "curp": curp,
-                            "error": respuesta.get("error", str(respuesta))
-                        })
+                    if curp:
+                        curps_lista.append((idx, curp))
+        
+        if not curps_lista:
+            print("❌ No hay CURPs para procesar")
+            return None
+        
+        print(f"🔄 Validando {len(curps_lista)} CURPs en paralelo...")
+        print()
+        
+        # Procesar en paralelo
+        resultados_procesados = {
+            "total": len(curps_lista),
+            "validos": [],
+            "invalidos": [],
+            "errores": []
+        }
+        
+        max_workers = 5  # Procesar 5 CURPs simultáneamente
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(validar_curp_individual, numero, curp): (numero, curp)
+                for numero, curp in curps_lista
+            }
+            
+            completadas = 0
+            for future in as_completed(futures):
+                completadas += 1
+                resultado = future.result()
+                
+                # Mostrar progreso
+                numero = resultado.get("numero")
+                curp = resultado.get("curp")
+                estado = resultado.get("estado")
+                
+                if estado == "REGISTRADO":
+                    print(f"✅ [{numero:3d}] {curp}... REGISTRADO")
+                    resultados_procesados["validos"].append({
+                        "numero": resultado["numero"],
+                        "curp_solicitado": resultado["curp"],
+                        "datos": resultado["datos"],
+                        "respuesta_completa": resultado["respuesta_completa"]
+                    })
+                elif estado == "NO_ENCONTRADO":
+                    print(f"❌ [{numero:3d}] {curp}... NO REGISTRADO")
+                    resultados_procesados["invalidos"].append({
+                        "numero": resultado["numero"],
+                        "curp": resultado["curp"],
+                        "razon": resultado["razon"]
+                    })
+                else:
+                    print(f"⚠️  [{numero:3d}] {curp}... ERROR")
+                    resultados_procesados["errores"].append({
+                        "numero": resultado["numero"],
+                        "curp": resultado["curp"],
+                        "error": resultado["error"]
+                    })
         
         print()
         print("=" * 80)
         print("📋 RESUMEN DE RESULTADOS")
         print("=" * 80)
         print()
-        
-        print(f"Total procesados:       {total}")
-        print(f"✅ Registrados:         {len(validos)}")
-        print(f"❌ No registrados:      {len(invalidos)}")
-        print(f"⚠️  Errores:            {len(errores)}")
+        print(f"Total procesados:       {resultados_procesados['total']}")
+        print(f"✅ Registrados:         {len(resultados_procesados['validos'])}")
+        print(f"❌ No registrados:      {len(resultados_procesados['invalidos'])}")
+        print(f"⚠️  Errores:            {len(resultados_procesados['errores'])}")
         print()
         
-        return {
-            "total": total,
-            "validos": validos,
-            "invalidos": invalidos,
-            "errores": errores
-        }
-        
-    except csv.Error as e:
-        print(f"❌ Error al leer CSV: {e}")
-        return None
+        return resultados_procesados
+    
     except Exception as e:
-        print(f"❌ Error inesperado: {e}")
+        print(f"❌ Error procesando archivo: {e}")
         return None
 
 
